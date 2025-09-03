@@ -10,7 +10,8 @@ const categories = [
   "Education & Training",
   "Technology",
   "Food & Catering",
-  "Event Planning"
+  "Event Planning",
+  "Others",
 ];
 
 interface CategoryFilterProps {
