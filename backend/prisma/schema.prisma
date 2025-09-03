@@ -1,0 +1,76 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  PROVIDER
+  ADMIN
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String
+  password  String    @db.Text
+  role      Role      @default(USER)
+
+  services  Service[] // A user can provide multiple services
+  reviews   Review[]  // A user can write multiple reviews
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Service {
+  id              String         @id @default(cuid())
+  name            String
+  description     String         @db.Text
+  category        String
+  rating          Float
+  reviewCount     Int
+  location        String?
+  imageUrl        String?        @db.Text
+  featured        Boolean        @default(false)
+  approvalStatus  ApprovalStatus @default(PENDING)
+
+  provider     User      @relation(fields: [providerId], references: [id])
+  providerId   String
+
+  reviews      Review[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // e.g., 1 to 5
+  comment   String   @db.Text
+  
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+
+  service   Service  @relation(fields: [serviceId], references: [id])
+  serviceId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([authorId, serviceId], name: "unique_author_service_review")
+}
