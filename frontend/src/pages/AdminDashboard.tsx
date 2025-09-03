@@ -25,6 +25,7 @@ const ServiceManagementTab = () => {
     const mutationOptions = {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['adminAllServices'] });
+            toast.success("Service status has been updated.");
         },
         onError: (error: Error) => { toast.error('Action Failed', { description: error.message }); },
     };
@@ -63,23 +64,23 @@ const ServiceManagementTab = () => {
                     <TableHead>Service</TableHead>
                     <TableHead>Provider</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Featured</TableHead> {/* <-- New Column Header */}
+                    <TableHead>Featured</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
                 {services?.map(service => (
                     <TableRow
-                    key={service.id}
-                        onClick={() => navigate(`/service/${service.id}`)} 
-                        className="cursor-pointer hover:bg-muted/50"       
+                        key={service.id}
+                        onClick={() => navigate(`/service/${service.id}`)}
+                        className="cursor-pointer hover:bg-muted/50"
                     >
                         <TableCell className="font-medium">{service.name}</TableCell>
                         <TableCell>{service.providerName}</TableCell>
                         <TableCell><Badge variant={getStatusVariant(service.approvalStatus)}>{service.approvalStatus}</Badge></TableCell>
-                        {/* New Cell with the Switch */}
                         <TableCell>
                             <Switch
+                                onClick={(e) => e.stopPropagation()} // Prevent row click when toggling
                                 checked={service.featured}
                                 onCheckedChange={(isChecked) => {
                                     featureMutation.mutate({ serviceId: service.id, featured: isChecked });
@@ -88,7 +89,33 @@ const ServiceManagementTab = () => {
                             />
                         </TableCell>
                         <TableCell className="text-right space-x-2">
-                           {/* ... existing buttons ... */}
+                            {service.approvalStatus === 'PENDING' && (
+                                <>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Prevents navigating to the details page
+                                            approveMutation.mutate(service.id);
+                                        }}
+                                        disabled={approveMutation.isPending || rejectMutation.isPending}
+                                    >
+                                        <Check className="mr-2 h-4 w-4" /> Approve
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Prevents navigating to the details page
+                                            rejectMutation.mutate(service.id);
+                                        }}
+                                        disabled={approveMutation.isPending || rejectMutation.isPending}
+                                    >
+                                        <X className="mr-2 h-4 w-4" /> Reject
+                                    </Button>
+                                </>
+                            )}
                         </TableCell>
                     </TableRow>
                 ))}
