@@ -165,7 +165,7 @@ const ServiceDetail = () => {
                                 {service.providerPhone ? (
                                     <Button asChild size="lg" className="w-full" variant="hero"><a href={`tel:${service.providerPhone}`}>Contact Provider</a></Button>
                                 ) : (<Button size="lg" className="w-full" variant="hero" disabled>Contact Info Unavailable</Button>)}
-                                <Button size="lg" className="w-full" variant="outline">Save for Later</Button>
+                                {/* <Button size="lg" className="w-full" variant="outline">Save for Later</Button> */}
                             </CardContent>
                         </Card>
                     </aside>
