@@ -6,7 +6,7 @@ interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
-    login: (token: string, user: Omit<User, 'id'>) => void;
+    login: (token: string, user: User) => void;
     logout: () => void;
 }
 
@@ -38,18 +38,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
     }, []);
 
-    const login = useCallback((newToken: string, userData: any) => {
-        const fullUser: User = {
-            id: userData.userId,
-            name: userData.name,
-            email: userData.email,
-            role: userData.role
-        };
+    const login = useCallback((newToken: string, userData: User) => {
         setToken(newToken);
-        setUser(fullUser);
+        setUser(userData); // We can use the user object directly
         localStorage.setItem('token', newToken);
-        localStorage.setItem('user', JSON.stringify(fullUser));
+        localStorage.setItem('user', JSON.stringify(userData));
     }, []);
+
 
     const logout = useCallback(() => {
         setToken(null);
@@ -67,9 +62,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         logout,
     };
 
+
     return (
         <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );
+    
 };

@@ -6,11 +6,12 @@ import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+// Make sure all these Form components are imported
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { loginUser } from '@/api/auth';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { LoginCredentials } from '@/types'; // Import the explicit type
+import { LoginCredentials, User } from '@/types'; // Import User type
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
@@ -20,6 +21,8 @@ const loginSchema = z.object({
 const Login = () => {
     const navigate = useNavigate();
     const { login } = useAuth();
+
+    // 1. The 'form' variable from useForm
     const form = useForm<z.infer<typeof loginSchema>>({
         resolver: zodResolver(loginSchema),
         defaultValues: { email: '', password: '' },
@@ -30,13 +33,12 @@ const Login = () => {
         onSuccess: (data) => {
             toast.success('Login successful!');
             
-            const userForContext = { 
+            const userForContext: User = { 
                 id: data.userId, 
                 name: data.name, 
                 email: data.email, 
                 role: data.role,
-                // The API doesn't return createdAt on login, so we use a placeholder to satisfy the User type
-                createdAt: new Date().toISOString() 
+                createdAt: new Date().toISOString()
             };
             login(data.token, userForContext);
             navigate('/');
@@ -48,7 +50,6 @@ const Login = () => {
         }
     });
 
-    // Use the explicit LoginCredentials type for clarity
     function onSubmit(values: LoginCredentials) {
         mutation.mutate(values);
     }
@@ -61,10 +62,14 @@ const Login = () => {
                     <CardDescription>Enter your email below to login to your account</CardDescription>
                 </CardHeader>
                 <CardContent>
+                     {/* 2. The <Form> wrapper component (Uppercase F) */}
+                     {/* It takes the 'form' variable to provide context */}
                      <Form {...form}>
+                        {/* 3. The <form> HTML element (lowercase f) */}
+                        {/* It handles the actual submission */}
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                             <FormField
-                                control={form.control}
+                                control={form.control} // This now works because of the <Form> wrapper
                                 name="email"
                                 render={({ field }) => (
                                     <FormItem>
