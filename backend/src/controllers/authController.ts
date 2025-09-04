@@ -5,7 +5,7 @@ import prisma from '../lib/prisma';
 import { Role } from '@prisma/client';
 
 export const register = async (req: Request, res: Response) => {
-    const { email, password, name, role } = req.body;
+    const { email, password, name, role, phone } = req.body;
 
     if (!email || !password || !name) {
         return res.status(400).json({ message: 'Email, password, and name are required' });
@@ -14,6 +14,11 @@ export const register = async (req: Request, res: Response) => {
     // Validate role
     if (role && !Object.values(Role).includes(role)) {
         return res.status(400).json({ message: 'Invalid role provided' });
+    }
+
+    // Require phone number for providers
+    if (role === Role.PROVIDER && !phone) {
+        return res.status(400).json({ message: 'Phone number is required for service providers' });
     }
 
     try {
@@ -30,6 +35,7 @@ export const register = async (req: Request, res: Response) => {
                 name,
                 password: hashedPassword,
                 role: role || Role.USER, // Default to USER if no role is specified
+                phone: role === Role.PROVIDER ? phone : null,
             },
         });
 

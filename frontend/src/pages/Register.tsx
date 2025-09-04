@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { registerUser } from '@/api/auth';
 import { toast } from 'sonner';
-import { Role } from '@/types';
+import { Role, RegisterCredentials } from '@/types';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 const registerSchema = z.object({
@@ -17,14 +17,25 @@ const registerSchema = z.object({
     email: z.string().email({ message: 'Invalid email address.' }),
     password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
     role: z.nativeEnum(Role, { required_error: 'Please select an account type.' }),
+    phone: z.string().optional(),
+}).refine((data) => {
+    if (data.role === Role.PROVIDER) {
+        return data.phone && data.phone.trim().length > 0;
+    }
+    return true;
+}, {
+    message: 'Phone number is required for service providers.',
+    path: ['phone'],
 });
 
 const Register = () => {
     const navigate = useNavigate();
     const form = useForm<z.infer<typeof registerSchema>>({
         resolver: zodResolver(registerSchema),
-        defaultValues: { name: '', email: '', password: '', role: Role.USER },
+        defaultValues: { name: '', email: '', password: '', role: Role.USER, phone: '' },
     });
+
+    const selectedRole = form.watch('role');
 
     const mutation = useMutation({
         mutationFn: registerUser,
@@ -41,7 +52,7 @@ const Register = () => {
         },
     });
 
-    function onSubmit(values: z.infer<typeof registerSchema>) {
+    function onSubmit(values: RegisterCredentials) {
         mutation.mutate(values);
     }
 
@@ -111,6 +122,21 @@ const Register = () => {
                                     </FormItem>
                                 )}
                             />
+                            {selectedRole === Role.PROVIDER && (
+                                <FormField
+                                    control={form.control}
+                                    name="phone"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Phone Number</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="0912345678" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
                             <FormField
                                 control={form.control}
                                 name="password"

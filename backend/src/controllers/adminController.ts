@@ -2,19 +2,23 @@ import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { ApprovalStatus } from '@prisma/client';
 
+// --- FIX #1: Add 'phone' to the provider select ---
 const includeProvider = {
     provider: {
         select: {
             name: true,
+            phone: true, // Added phone
         },
     },
 };
 
+// --- FIX #2: Add 'providerPhone' to the transformed object ---
 const transformService = (service: any) => {
     const { provider, ...rest } = service;
     return {
         ...rest,
         providerName: provider.name,
+        providerPhone: provider?.phone || null, // Added providerPhone
     };
 };
 
@@ -35,7 +39,7 @@ export const getAllServicesForAdmin = async (req: Request, res: Response) => {
 // PATCH /api/admin/services/:id/feature
 export const toggleFeaturedStatus = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { featured } = req.body; // Expecting { featured: true } or { featured: false }
+    const { featured } = req.body;
 
     if (typeof featured !== 'boolean') {
         return res.status(400).json({ message: 'Featured status must be a boolean' });
@@ -60,8 +64,8 @@ export const getServiceByIdForAdmin = async (req: Request, res: Response) => {
         const service = await prisma.service.findUnique({
             where: { id },
             include: {
-                ...includeProvider,
-                reviews: { // You might want to see reviews even if pending
+                ...includeProvider, // This now correctly includes the phone number
+                reviews: {
                     orderBy: { createdAt: 'desc' },
                     include: {
                         author: {
@@ -76,6 +80,7 @@ export const getServiceByIdForAdmin = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'Service not found' });
         }
         
+        // This now correctly transforms the service object with the phone number
         res.json(transformService(service));
     } catch (error) {
         console.error(`Admin failed to get service ${id}:`, error);
@@ -141,7 +146,6 @@ export const promoteUserToAdmin = async (req: Request, res: Response) => {
             where: { id },
             data: { role: 'ADMIN' },
         });
-        // Exclude password from the returned object
         const { password, ...userWithoutPassword } = updatedUser;
         res.json(userWithoutPassword);
     } catch (error) {

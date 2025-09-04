@@ -1,4 +1,17 @@
 import { Service } from "@/types";
+import { editServiceSchema } from '@/pages/EditService'; // Adjust the import path if needed
+import * as z from 'zod';
+// Define the shape of the data for updating a service.
+// You can also add this to your `types/index.ts` file for consistency.
+// interface EditServiceData {
+//     name: string;
+//     description: string;
+//     category: string;
+//     location: string;
+//     videoUrl?: string;
+// }
+
+type EditServiceData = z.infer<typeof editServiceSchema>;
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -39,10 +52,13 @@ export const getServiceForEdit = (serviceId: string): Promise<Service> => {
     return providerRequest<Service>(`services/provider/${serviceId}`);
 };
 
-export const updateService = ({ serviceId, serviceData }: { serviceId: string, serviceData: FormData }): Promise<Service> => {
+// --- THIS IS THE FIX ---
+// Change serviceData from FormData to our new EditServiceData interface.
+// The body is now a JSON string.
+export const updateService = ({ serviceId, serviceData }: { serviceId: string, serviceData: EditServiceData }): Promise<Service> => {
     return providerRequest<Service>(`services/${serviceId}`, {
         method: 'PATCH',
-        body: serviceData,
+        body: JSON.stringify(serviceData),
     });
 };
 

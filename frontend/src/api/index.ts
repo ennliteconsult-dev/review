@@ -22,7 +22,8 @@ const apiRequest = async <T>(endpoint: string, options: RequestInit = {}): Promi
             const errorData = await response.json();
             throw new Error(errorData.message || 'Something went wrong');
         }
-        return response.json();
+        const text = await response.text();
+        return text ? JSON.parse(text) : {} as T;
     } catch (error) {
         console.error(`API request to ${url} failed:`, error);
         throw error;
@@ -44,14 +45,15 @@ export const getFeaturedServices = (): Promise<Service[]> => {
     return apiRequest<Service[]>('services/featured');
 }
 
+// --- FIX: Specify the correct return type ---
 export const getTopRankedServices = (): Promise<TopService[]> => {
-    return apiRequest<Service[]>('services/top-ranked');
+    return apiRequest<TopService[]>('services/top-ranked');
 }
 
-export const createService = (data: FormData): Promise<Service> => {
+export const createService = (data: CreateServiceData): Promise<Service> => {
     return apiRequest<Service>('services', {
         method: 'POST',
-        body: data,
+        body: JSON.stringify(data),
     });
 };
 

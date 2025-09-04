@@ -8,27 +8,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { createService } from '@/api';
+import { createService } from '@/api'; // This API function will now send JSON
 import { toast } from 'sonner';
 import { Header } from '@/components/Header';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect } from 'react';
-import { Role } from '@/types';
+import { Role, CreateServiceData } from '@/types';
 
-const categories = [ "Home Services", "Beauty & Wellness", "Professional Services", "Automotive", "Health & Medical", "Education & Training", "Technology", "Food & Catering", "Event Planning", "Others" ];
+const categories = [ "Home Services", "Beauty & Wellness", "Professional Services", "Automotive", "Health & Medical", "Education & Training", "Technology", "Food & Catering", "Event Planning" ];
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+// YouTube URL regex for validation
+const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
 
 const createServiceSchema = z.object({
     name: z.string().min(3, { message: 'Service name must be at least 3 characters.' }),
     description: z.string().min(10, { message: 'Description must be at least 10 characters.' }),
     category: z.string().nonempty({ message: 'Please select a category.' }),
     location: z.string().min(2, { message: 'Location is required.' }),
-    image: z.any()
-        .refine((files) => files?.length == 1, "Image is required.")
-        .refine((files) => files?.[0]?.size <= MAX_FILE_SIZE, `Max file size is 5MB.`)
-        .refine((files) => ACCEPTED_IMAGE_TYPES.includes(files?.[0]?.type), ".jpg, .jpeg, .png and .webp files are accepted."),
+    // Update schema for videoUrl
+    videoUrl: z.string().refine((url) => url ? youtubeRegex.test(url) : true, {
+        message: "Please enter a valid YouTube URL.",
+    }).optional(),
 });
 
 const CreateService = () => {
@@ -50,11 +50,11 @@ const CreateService = () => {
 
     const form = useForm<z.infer<typeof createServiceSchema>>({
         resolver: zodResolver(createServiceSchema),
-        defaultValues: { name: '', description: '', location: '', category: '' },
+        defaultValues: { name: '', description: '', location: '', category: '', videoUrl: '' },
     });
-    const fileRef = form.register("image");
 
     const mutation = useMutation({
+        // The `createService` API function now needs to send JSON instead of FormData
         mutationFn: createService,
         onSuccess: (data) => {
             toast.success('Service Submitted!', {
@@ -66,14 +66,9 @@ const CreateService = () => {
         onError: (error) => { toast.error('Failed to create service', { description: error.message }); },
     });
 
-    function onSubmit(values: z.infer<typeof createServiceSchema>) {
-        const formData = new FormData();
-        formData.append('name', values.name);
-        formData.append('description', values.description);
-        formData.append('category', values.category);
-        formData.append('location', values.location);
-        formData.append('image', values.image[0]);
-        mutation.mutate(formData);
+    // The onSubmit function now sends a JSON object
+     function onSubmit(values: CreateServiceData) {
+        mutation.mutate(values);
     }
 
     if (isLoading || !user || user.role !== Role.PROVIDER) {
@@ -106,8 +101,9 @@ const CreateService = () => {
                                 <FormField control={form.control} name="location" render={({ field }) => (
                                     <FormItem><FormLabel>Location</FormLabel><FormControl><Input placeholder="e.g., San Francisco, CA" {...field} /></FormControl><FormMessage /></FormItem>
                                 )}/>
-                                <FormField control={form.control} name="image" render={({ field }) => (
-                                    <FormItem><FormLabel>Service Image</FormLabel><FormControl><Input type="file" {...fileRef} /></FormControl><FormMessage /></FormItem>
+                                {/* Change file input to text input for YouTube URL */}
+                                <FormField control={form.control} name="videoUrl" render={({ field }) => (
+                                    <FormItem><FormLabel>YouTube Video URL (Optional)</FormLabel><FormControl><Input placeholder="https://www.youtube.com/watch?v=..." {...field} /></FormControl><FormMessage /></FormItem>
                                 )}/>
                                 <Button type="submit" className="w-full" size="lg" disabled={mutation.isPending}>
                                     {mutation.isPending ? 'Submitting...' : 'Submit for Approval'}

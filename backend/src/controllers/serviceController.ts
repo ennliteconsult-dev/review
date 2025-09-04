@@ -7,17 +7,18 @@ const includeProvider = {
     provider: {
         select: {
             name: true,
+            phone: true,
         },
     },
 };
 
-// Helper to transform service data to include providerName directly
+// Helper to transform service data
 const transformService = (service: any) => {
-    // This function now needs to handle cases where reviews might not be included
     const { provider, reviews, ...rest } = service;
     const result: any = {
         ...rest,
-        providerName: provider?.name || 'N/A', // Handle case where provider might not be included
+        providerName: provider?.name || 'N/A',
+        providerPhone: provider?.phone || null,
     };
     if (reviews !== undefined) {
         result.reviews = reviews;
@@ -29,22 +30,15 @@ const transformService = (service: any) => {
 // GET /api/services
 export const getAllServices = async (req: Request, res: Response) => {
     const { category } = req.query;
-
-    let whereClause: any = {
-        approvalStatus: 'APPROVED',
-    };
-
+    let whereClause: any = { approvalStatus: 'APPROVED' };
     if (category && typeof category === 'string' && category !== 'All') {
         whereClause.category = { equals: category };
     }
-
     try {
         const services = await prisma.service.findMany({
             where: whereClause,
             include: includeProvider,
-            orderBy: {
-                createdAt: 'desc',
-            }
+            orderBy: { createdAt: 'desc' }
         });
         res.json(services.map(transformService));
     } catch (error) {
@@ -62,9 +56,7 @@ export const getFeaturedServices = async (req: Request, res: Response) => {
                 approvalStatus: 'APPROVED'
             },
             include: includeProvider,
-            orderBy: {
-                rating: 'desc',
-            }
+            orderBy: { rating: 'desc' }
         });
         res.json(featured.map(transformService));
     } catch (error) {
@@ -78,66 +70,39 @@ export const getTopRankedServices = async (req: Request, res: Response) => {
     try {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-        // 1. Aggregate review data from the last 30 days
         const recentReviewsAggregation = await prisma.review.groupBy({
             by: ['serviceId'],
-            where: {
-                createdAt: {
-                    gte: thirtyDaysAgo,
-                },
-            },
-            _avg: {
-                rating: true,
-            },
-            _count: {
-                id: true,
-            },
+            where: { createdAt: { gte: thirtyDaysAgo } },
+            _avg: { rating: true },
+            _count: { id: true },
         });
-        
-        // 2. Calculate a score for each service
         const rankedServices = recentReviewsAggregation
             .map(agg => ({
                 serviceId: agg.serviceId,
-                // Simple scoring: average rating * number of reviews. Penalizes services with few reviews.
                 score: (agg._avg.rating || 0) * agg._count.id,
                 rating: agg._avg.rating || 0,
                 reviewCount: agg._count.id,
             }))
-            .sort((a, b) => b.score - a.score) // Sort by score descending
-            .slice(0, 3); // Take the top 3
-
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 3);
         const serviceIds = rankedServices.map(s => s.serviceId);
-
-        // 3. Fetch the full service details for the top ranked IDs
         const topServicesDetails = await prisma.service.findMany({
             where: {
-                id: {
-                    in: serviceIds,
-                },
+                id: { in: serviceIds },
                 approvalStatus: 'APPROVED'
             },
             include: includeProvider,
         });
-
-        // 4. Map the details back to the ranked data, adding the rank
         const result: TopService[] = rankedServices.map((ranked, index) => {
             const details = topServicesDetails.find(d => d.id === ranked.serviceId);
             return {
                 ...transformService(details),
-                id: details!.id,
-                name: details!.name,
-                description: details!.description,
-                category: details!.category,
-                location: details!.location,
-                featured: details!.featured,
-                approvalStatus: details!.approvalStatus,
-                rating: ranked.rating,
-                reviewCount: ranked.reviewCount,
-                rank: index + 1,
+                id: details!.id, name: details!.name, description: details!.description,
+                category: details!.category, location: details!.location, featured: details!.featured,
+                approvalStatus: details!.approvalStatus, rating: ranked.rating,
+                reviewCount: ranked.reviewCount, rank: index + 1,
             };
         });
-
         res.json(result);
     } catch (error) {
         console.error("Failed to get top ranked services:", error);
@@ -147,38 +112,43 @@ export const getTopRankedServices = async (req: Request, res: Response) => {
 
 // POST /api/services
 export const createService = async (req: AuthRequest, res: Response) => {
-    const { name, description, category, location } = req.body;
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
-    const providerId = req.userId; // From our 'protect' middleware
+    // --- DEBUGGING STEP ---
+    console.log("Received request to create service. Body:", req.body);
+
+    const { name, description, category, location, videoUrl } = req.body;
+    const providerId = req.userId;
 
     if (!providerId) {
         return res.status(401).json({ message: 'User not authenticated' });
     }
 
     if (!name || !description || !category) {
+        console.error("Validation failed: Missing required fields.");
         return res.status(400).json({ message: 'Name, description, and category are required' });
     }
     
     try {
+        console.log("Attempting to create service in database with providerId:", providerId);
         const newService = await prisma.service.create({
             data: {
                 name,
                 description,
                 category,
                 location,
-                imageUrl,
+                videoUrl,
                 providerId,
-                // Set default values
                 rating: 0,
                 reviewCount: 0,
                 featured: false,
-                approvalStatus: 'PENDING', // Services are pending by default
+                approvalStatus: 'PENDING',
             },
             include: includeProvider
         });
+        console.log("Service created successfully:", newService.id);
         res.status(201).json(transformService(newService));
     } catch (error) {
-        console.error('Failed to create service:', error);
+        // This will now print the detailed Prisma error to your backend console
+        console.error('Failed to create service in database:', error); 
         res.status(500).json({ message: 'Failed to create service' });
     }
 };
@@ -189,7 +159,6 @@ export const getMyServices = async (req: AuthRequest, res: Response) => {
     if (!providerId) {
         return res.status(401).json({ message: 'User not authenticated' });
     }
-
     try {
         const myServices = await prisma.service.findMany({
             where: { providerId },
@@ -206,26 +175,21 @@ export const getMyServices = async (req: AuthRequest, res: Response) => {
 // GET /api/services/search
 export const searchServices = async (req: Request, res: Response) => {
     const { q } = req.query;
-
     if (!q || typeof q !== 'string') {
         return res.status(400).json({ message: "A search query 'q' is required." });
     }
-
     try {
         const services = await prisma.service.findMany({
             where: {
                 approvalStatus: 'APPROVED',
                 OR: [
-                    { name: { contains: q } },
-                    { description: { contains: q } },
-                    { category: { contains: q } },
+                    { name: { contains: q, mode: 'insensitive' } },
+                    { description: { contains: q, mode: 'insensitive' } },
+                    { category: { contains: q, mode: 'insensitive' } },
                 ],
             },
             include: includeProvider,
-            orderBy: {
-                // A simple relevance score could be implemented here later
-                rating: 'desc',
-            }
+            orderBy: { rating: 'desc' }
         });
         res.json(services.map(transformService));
     } catch (error) {
@@ -237,8 +201,8 @@ export const searchServices = async (req: Request, res: Response) => {
 // PATCH /api/services/:id
 export const updateService = async (req: AuthRequest, res: Response) => {
     const { id: serviceId } = req.params;
-    const { name, description, category, location } = req.body;
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
+    // Destructure videoUrl from body
+    const { name, description, category, location, videoUrl } = req.body;
     const providerId = req.userId;
 
     if (!providerId) {
@@ -247,7 +211,6 @@ export const updateService = async (req: AuthRequest, res: Response) => {
 
     try {
         const service = await prisma.service.findUnique({ where: { id: serviceId } });
-
         if (!service) {
             return res.status(404).json({ message: 'Service not found' });
         }
@@ -258,12 +221,8 @@ export const updateService = async (req: AuthRequest, res: Response) => {
         const updatedService = await prisma.service.update({
             where: { id: serviceId },
             data: {
-                name,
-                description,
-                category,
-                location,
-                imageUrl, // Add the new image URL
-                // CRITICAL: Reset approval status on any edit
+                name, description, category, location,
+                videoUrl, // Update the video URL
                 approvalStatus: 'PENDING',
             },
             include: includeProvider,
@@ -280,31 +239,20 @@ export const updateService = async (req: AuthRequest, res: Response) => {
 export const deleteService = async (req: AuthRequest, res: Response) => {
     const { id: serviceId } = req.params;
     const providerId = req.userId;
-
     if (!providerId) {
         return res.status(401).json({ message: 'User not authenticated' });
     }
-
     try {
         const service = await prisma.service.findUnique({ where: { id: serviceId } });
-
         if (!service) {
             return res.status(404).json({ message: 'Service not found' });
         }
         if (service.providerId !== providerId) {
             return res.status(403).json({ message: 'You are not authorized to delete this service' });
         }
-        
-        // Before deleting a service, we must delete its reviews to avoid foreign key constraint errors
-        await prisma.review.deleteMany({
-            where: { serviceId },
-        });
-
-        await prisma.service.delete({
-            where: { id: serviceId },
-        });
-
-        res.status(204).send(); // 204 No Content is standard for a successful delete
+        await prisma.review.deleteMany({ where: { serviceId } });
+        await prisma.service.delete({ where: { id: serviceId } });
+        res.status(204).send();
     } catch (error) {
         console.error(`Failed to delete service ${serviceId}:`, error);
         res.status(500).json({ message: 'Failed to delete service' });
@@ -315,20 +263,17 @@ export const deleteService = async (req: AuthRequest, res: Response) => {
 export const getProviderServiceById = async (req: AuthRequest, res: Response) => {
     const { id: serviceId } = req.params;
     const providerId = req.userId;
-
     try {
         const service = await prisma.service.findUnique({
             where: { id: serviceId },
             include: includeProvider,
         });
-
         if (!service) {
             return res.status(404).json({ message: 'Service not found' });
         }
         if (service.providerId !== providerId) {
             return res.status(403).json({ message: 'You are not authorized to view this service' });
         }
-        
         res.json(transformService(service));
     } catch (error) {
         console.error(`Failed to get provider service ${serviceId}:`, error);
@@ -342,8 +287,15 @@ export const getServiceById = async (req: Request, res: Response) => {
     try {
         const service = await prisma.service.findUnique({
             where: { id },
+            // --- THIS IS THE FIX ---
+            // We now correctly include the provider's name AND phone
             include: {
-                ...includeProvider,
+                provider: {
+                    select: {
+                        name: true,
+                        phone: true, // Add the phone field here
+                    }
+                },
                 reviews: {
                     orderBy: { createdAt: 'desc' },
                     include: {
@@ -355,11 +307,9 @@ export const getServiceById = async (req: Request, res: Response) => {
             },
         });
 
-        // Only show the service if it exists AND is approved
         if (service && service.approvalStatus === 'APPROVED') {
             res.json(transformService(service));
         } else {
-            // For a public user, a pending/rejected service is the same as not found
             res.status(404).json({ message: 'Service not found or is not approved' });
         }
     } catch (error) {

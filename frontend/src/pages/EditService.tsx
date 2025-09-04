@@ -15,18 +15,23 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect } from 'react';
 
-const categories = [ "Home Services", "Beauty & Wellness", "Professional Services", "Automotive", "Health & Medical", "Education & Training", "Technology", "Food & Catering", "Event Planning", "Others" ];
+const categories = [ "Home Services", "Beauty & Wellness", "Professional Services", "Automotive", "Health & Medical", "Education & Training", "Technology", "Food & Catering", "Event Planning" ];
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+// YouTube URL regex for validation
+const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
 
-const editServiceSchema = z.object({
+export const editServiceSchema = z.object({
     name: z.string().min(3, { message: 'Service name must be at least 3 characters.' }),
     description: z.string().min(10, { message: 'Description must be at least 10 characters.' }),
     category: z.string().nonempty({ message: 'Please select a category.' }),
     location: z.string().min(2, { message: 'Location is required.' }),
-    image: z.any().optional(),
+    videoUrl: z.string().refine((url) => url ? youtubeRegex.test(url) : true, {
+        message: "Please enter a valid YouTube URL.",
+    }).optional(),
 });
+
+// Define the type for the data being submitted
+type EditServiceData = z.infer<typeof editServiceSchema>;
 
 const EditService = () => {
     const { id } = useParams<{ id: string }>();
@@ -39,11 +44,10 @@ const EditService = () => {
         enabled: !!id,
     });
 
-    const form = useForm<z.infer<typeof editServiceSchema>>({
+    const form = useForm<EditServiceData>({
         resolver: zodResolver(editServiceSchema),
-        defaultValues: { name: '', description: '', category: '', location: '' },
+        defaultValues: { name: '', description: '', category: '', location: '', videoUrl: '' },
     });
-    const fileRef = form.register("image");
     
     useEffect(() => {
         if (service) {
@@ -52,6 +56,7 @@ const EditService = () => {
                 description: service.description,
                 category: service.category,
                 location: service.location || '',
+                videoUrl: service.videoUrl || '',
             });
         }
     }, [service, form]);
@@ -63,22 +68,15 @@ const EditService = () => {
             queryClient.invalidateQueries({ queryKey: ['myServices'] });
             navigate('/dashboard/provider');
         },
-        onError: (error) => {
+        onError: (error: Error) => {
             toast.error('Failed to update service', { description: error.message });
         },
     });
 
-    function onSubmit(values: z.infer<typeof editServiceSchema>) {
+    function onSubmit(values: EditServiceData) {
         if (!id) return;
-        const formData = new FormData();
-        formData.append('name', values.name);
-        formData.append('description', values.description);
-        formData.append('category', values.category);
-        formData.append('location', values.location);
-        if (values.image && values.image.length > 0) {
-            formData.append('image', values.image[0]);
-        }
-        mutation.mutate({ serviceId: id, serviceData: formData });
+        // The mutation now sends a JSON object
+        mutation.mutate({ serviceId: id, serviceData: values });
     }
 
     if (isLoadingService) return <div className="min-h-screen bg-background"><Header /><div className="container mx-auto py-12"><Skeleton className="h-96 w-full max-w-2xl mx-auto" /></div></div>
@@ -93,7 +91,7 @@ const EditService = () => {
                 <Card className="mx-auto max-w-2xl">
                     <CardHeader>
                         <CardTitle className="text-3xl">Edit Your Service</CardTitle>
-                        <CardDescription>Update the details and resubmit for approval. The image will only be updated if you select a new one.</CardDescription>
+                        <CardDescription>Update the details and resubmit for approval.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Form {...form}>
@@ -106,7 +104,7 @@ const EditService = () => {
                                     <FormMessage /></FormItem>
                                 )}/>
                                 <FormField control={form.control} name="location" render={({ field }) => ( <FormItem><FormLabel>Location</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem> )}/>
-                                <FormField control={form.control} name="image" render={({ field }) => ( <FormItem><FormLabel>Update Image (Optional)</FormLabel><FormControl><Input type="file" {...fileRef} /></FormControl><FormMessage /></FormItem> )}/>
+                                <FormField control={form.control} name="videoUrl" render={({ field }) => ( <FormItem><FormLabel>YouTube Video URL (Optional)</FormLabel><FormControl><Input placeholder="https://www.youtube.com/watch?v=..." {...field} /></FormControl><FormMessage /></FormItem> )}/>
                                 <Button type="submit" className="w-full" size="lg" disabled={mutation.isPending}>
                                     {mutation.isPending ? 'Updating Service...' : 'Update and Resubmit'}
                                 </Button>

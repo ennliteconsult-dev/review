@@ -10,6 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { loginUser } from '@/api/auth';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import { LoginCredentials } from '@/types'; // Import the explicit type
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
@@ -28,7 +29,16 @@ const Login = () => {
         mutationFn: loginUser,
         onSuccess: (data) => {
             toast.success('Login successful!');
-            login(data.token, { userId: data.userId, name: data.name, email: data.email, role: data.role });
+            
+            const userForContext = { 
+                id: data.userId, 
+                name: data.name, 
+                email: data.email, 
+                role: data.role,
+                // The API doesn't return createdAt on login, so we use a placeholder to satisfy the User type
+                createdAt: new Date().toISOString() 
+            };
+            login(data.token, userForContext);
             navigate('/');
         },
         onError: (error) => {
@@ -38,7 +48,8 @@ const Login = () => {
         }
     });
 
-    function onSubmit(values: z.infer<typeof loginSchema>) {
+    // Use the explicit LoginCredentials type for clarity
+    function onSubmit(values: LoginCredentials) {
         mutation.mutate(values);
     }
 

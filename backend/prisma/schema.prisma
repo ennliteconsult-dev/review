@@ -28,6 +28,7 @@ model User {
   email     String    @unique
   name      String
   password  String    @db.Text
+  phone     String?
   role      Role      @default(USER)
 
   services  Service[] // A user can provide multiple services
@@ -45,7 +46,7 @@ model Service {
   rating          Float
   reviewCount     Int
   location        String?
-  imageUrl        String?        @db.Text
+  videoUrl        String?        @db.Text
   featured        Boolean        @default(false)
   approvalStatus  ApprovalStatus @default(PENDING)
 

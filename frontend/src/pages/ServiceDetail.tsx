@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getServiceById } from "@/api";
 import { createReview } from "@/api/review";
 import { Header } from "@/components/Header";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Star, MapPin, Users, ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,12 +16,32 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from 'sonner';
 import { getAdminServiceById } from '@/api/admin'
-import { Role } from "@/types";
+import { Role, CreateReviewData } from "@/types";
 
 const reviewSchema = z.object({
     rating: z.coerce.number().min(1, "Rating is required").max(5),
     comment: z.string().min(10, "Comment must be at least 10 characters long."),
 });
+
+// Helper function to convert YouTube URL to embeddable URL
+const getYouTubeEmbedUrl = (url: string) => {
+    if (!url) return null;
+    let videoId = null;
+    // Standard URL: https://www.youtube.com/watch?v=VIDEO_ID
+    const urlParams = new URLSearchParams(new URL(url).search);
+    videoId = urlParams.get('v');
+    
+    // Shortened URL: https://youtu.be/VIDEO_ID
+    if (!videoId) {
+        const match = url.match(/youtu\.be\/([^?]+)/);
+        if (match) {
+            videoId = match[1];
+        }
+    }
+    
+    return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+};
+
 
 const ServiceDetail = () => {
     const { id } = useParams<{ id: string }>();
@@ -30,18 +49,13 @@ const ServiceDetail = () => {
     const queryClient = useQueryClient();
 
     const isAdmin = user?.role === Role.ADMIN;
+    const queryFn = isAdmin ? () => getAdminServiceById(id!) : () => getServiceById(id!);
 
-    const queryFn = isAdmin 
-    ? () => getAdminServiceById(id!) 
-    : () => getServiceById(id!);
-
-    // Add isAdmin to the queryKey to ensure caches are separate
     const { data: service, isLoading, isError, error } = useQuery({
         queryKey: ["service", id, { isAdmin }],
         queryFn: queryFn,
         enabled: !!id,
     });
-
     
     const form = useForm<z.infer<typeof reviewSchema>>({
         resolver: zodResolver(reviewSchema),
@@ -60,13 +74,15 @@ const ServiceDetail = () => {
         },
     });
 
-    const onSubmitReview = (values: z.infer<typeof reviewSchema>) => {
+    const onSubmitReview = (values: CreateReviewData) => {
         if (!id) return;
         reviewMutation.mutate({ serviceId: id, reviewData: values });
     };
     
     const hasUserReviewed = service?.reviews?.some(review => review.authorId === user?.id);
     const canReview = isAuthenticated && user?.id !== service?.providerId && !hasUserReviewed;
+
+    const embedUrl = service?.videoUrl ? getYouTubeEmbedUrl(service.videoUrl) : null;
 
     if (isLoading) return <div><Header /><p>Loading...</p></div>
     if (isError) return <div><Header /><p>Error: {(error as Error).message}</p></div>
@@ -89,11 +105,19 @@ const ServiceDetail = () => {
                                 {service.location && <div className="flex items-center gap-1"><MapPin className="h-4 w-4" /><span>{service.location}</span></div>}
                             </div>
                         </div>
+                        {/* YouTube video embed */}
                         <div className="aspect-video w-full bg-muted rounded-lg overflow-hidden">
-                            {service.imageUrl ? (
-                                <img src={`${import.meta.env.VITE_API_BASE_URL.replace('/api', '')}${service.imageUrl}`} alt={service.name} className="w-full h-full object-cover" />
+                            {embedUrl ? (
+                                <iframe 
+                                    className="w-full h-full"
+                                    src={embedUrl}
+                                    title={service.name}
+                                    frameBorder="0" 
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                    allowFullScreen>
+                                </iframe>
                             ) : (
-                                <div className="w-full h-full flex items-center justify-center"><p className="text-muted-foreground">No Image Provided</p></div>
+                                <div className="w-full h-full flex items-center justify-center"><p className="text-muted-foreground">No Video Provided</p></div>
                             )}
                         </div>
                         <div>
@@ -109,24 +133,10 @@ const ServiceDetail = () => {
                                         <Form {...form}>
                                             <form onSubmit={form.handleSubmit(onSubmitReview)} className="space-y-4">
                                                 <FormField control={form.control} name="rating" render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Rating</FormLabel>
-                                                        <FormControl>
-                                                            <div className="flex items-center gap-1">
-                                                                {[1, 2, 3, 4, 5].map(star => (
-                                                                    <Star key={star} className={`cursor-pointer h-6 w-6 ${star <= (field.value || 0) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} onClick={() => field.onChange(star)} />
-                                                                ))}
-                                                            </div>
-                                                        </FormControl>
-                                                        <FormMessage />
-                                                    </FormItem>
+                                                    <FormItem><FormLabel>Rating</FormLabel><FormControl><div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map(star => (<Star key={star} className={`cursor-pointer h-6 w-6 ${star <= (field.value || 0) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} onClick={() => field.onChange(star)} />))}</div></FormControl><FormMessage /></FormItem>
                                                 )} />
                                                 <FormField control={form.control} name="comment" render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Comment</FormLabel>
-                                                        <FormControl><Textarea placeholder="Share your experience..." {...field} /></FormControl>
-                                                        <FormMessage />
-                                                    </FormItem>
+                                                    <FormItem><FormLabel>Comment</FormLabel><FormControl><Textarea placeholder="Share your experience..." {...field} /></FormControl><FormMessage /></FormItem>
                                                 )} />
                                                 <Button type="submit" disabled={reviewMutation.isPending}>{reviewMutation.isPending ? 'Submitting...' : 'Submit Review'}</Button>
                                             </form>
@@ -134,16 +144,10 @@ const ServiceDetail = () => {
                                     </CardContent>
                                 </Card>
                             )}
-                            {hasUserReviewed && (
-                                <div className="p-4 bg-muted/50 rounded-lg text-center text-muted-foreground">
-                                    <p>You have already reviewed this service.</p>
-                                </div>
-                            )}
+                            {hasUserReviewed && (<div className="p-4 bg-muted/50 rounded-lg text-center text-muted-foreground"><p>You have already reviewed this service.</p></div>)}
                             {service.reviews && service.reviews.length > 0 ? (
                                 service.reviews.map(review => <ReviewCard key={review.id} review={review} />)
-                            ) : (
-                                <p className="text-muted-foreground">No reviews yet. Be the first to write one!</p>
-                            )}
+                            ) : (<p className="text-muted-foreground">No reviews yet. Be the first to write one!</p>)}
                         </div>
                     </div>
                     <aside className="md:col-span-1">
@@ -158,7 +162,9 @@ const ServiceDetail = () => {
                                         <span className="text-sm text-muted-foreground">({service.reviewCount} reviews)</span>
                                     </div>
                                 </div>
-                                <Button size="lg" className="w-full" variant="hero">Contact Provider</Button>
+                                {service.providerPhone ? (
+                                    <Button asChild size="lg" className="w-full" variant="hero"><a href={`tel:${service.providerPhone}`}>Contact Provider</a></Button>
+                                ) : (<Button size="lg" className="w-full" variant="hero" disabled>Contact Info Unavailable</Button>)}
                                 <Button size="lg" className="w-full" variant="outline">Save for Later</Button>
                             </CardContent>
                         </Card>

@@ -14,7 +14,6 @@ import {
 import { protect, checkRole } from '../middleware/authMiddleware';
 import { Role } from '@prisma/client';
 import reviewRoutes from './reviewRoutes';
-import { upload } from '../middleware/uploadMiddleware';
 
 const router = Router();
 
@@ -23,7 +22,8 @@ router.use('/:serviceId/reviews', reviewRoutes);
 
 router.route('/')
     .get(getAllServices)
-    .post(protect, checkRole([Role.PROVIDER, Role.ADMIN]), upload.single('image'), createService);
+    // Remove upload.single('image') - we are now accepting JSON data
+    .post(protect, checkRole([Role.PROVIDER, Role.ADMIN]), createService);
 
 router.get('/my-services', protect, checkRole([Role.PROVIDER]), getMyServices);
 router.get('/featured', getFeaturedServices);
@@ -33,7 +33,8 @@ router.get('/provider/:id', protect, checkRole([Role.PROVIDER]), getProviderServ
 
 router.route('/:id')
     .get(getServiceById)
-    .patch(protect, checkRole([Role.PROVIDER, Role.ADMIN]), upload.single('image'), updateService)
+    // Remove upload.single('image')
+    .patch(protect, checkRole([Role.PROVIDER, Role.ADMIN]), updateService)
     .delete(protect, checkRole([Role.PROVIDER, Role.ADMIN]), deleteService);
 
 export default router;
