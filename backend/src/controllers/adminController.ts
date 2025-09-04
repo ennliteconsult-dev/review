@@ -22,6 +22,68 @@ const transformService = (service: any) => {
     };
 };
 
+export const deleteServiceByAdmin = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    try {
+        // First, delete all reviews associated with the service to maintain data integrity
+        await prisma.review.deleteMany({
+            where: { serviceId: id },
+        });
+
+        // Then, delete the service itself
+        await prisma.service.delete({
+            where: { id },
+        });
+
+        res.status(204).send(); // Send a 'No Content' response for a successful deletion
+    } catch (error) {
+        console.error(`Admin failed to delete service ${id}:`, error);
+        res.status(500).json({ message: 'Failed to delete service' });
+    }
+};
+
+// --- NEW FUNCTION: DELETE /api/admin/users/:id ---
+export const deleteUserByAdmin = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    try {
+        // A user might be a provider with services. We need to handle this.
+        // Step 1: Find all services provided by this user.
+        const userServices = await prisma.service.findMany({
+            where: { providerId: id },
+            select: { id: true },
+        });
+        const serviceIds = userServices.map(service => service.id);
+
+        // Step 2: Delete all reviews for those services.
+        if (serviceIds.length > 0) {
+            await prisma.review.deleteMany({
+                where: { serviceId: { in: serviceIds } },
+            });
+        }
+        
+        // Step 3: Delete the services themselves.
+        await prisma.service.deleteMany({
+            where: { providerId: id },
+        });
+
+        // Step 4: Delete all reviews written by this user.
+        await prisma.review.deleteMany({
+            where: { authorId: id },
+        });
+
+        // Step 5: Finally, delete the user.
+        await prisma.user.delete({
+            where: { id },
+        });
+
+        res.status(204).send();
+    } catch (error) {
+        console.error(`Admin failed to delete user ${id}:`, error);
+        res.status(500).json({ message: 'Failed to delete user' });
+    }
+};
+
+
 // GET /api/admin/services
 export const getAllServicesForAdmin = async (req: Request, res: Response) => {
     try {

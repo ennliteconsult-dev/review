@@ -18,10 +18,20 @@ const adminRequest = async <T>(endpoint: string, options: RequestInit = {}): Pro
                 ...options.headers,
             },
         });
+
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Something went wrong');
         }
+
+        // --- THIS IS THE FIX ---
+        // A 204 status means success, but there is no JSON body to parse.
+        // We return an empty object to resolve the promise successfully.
+        if (response.status === 204) {
+            return {} as T;
+        }
+
+        // Only attempt to parse JSON if there is content.
         return response.json();
     } catch (error) {
         console.error(`API request to ${url} failed:`, error);
@@ -52,10 +62,18 @@ export const getAdminServiceById = (serviceId: string): Promise<Service> => {
     return adminRequest<Service>(`services/${serviceId}`);
 };
 
+export const deleteService = (serviceId: string): Promise<void> => {
+    return adminRequest<void>(`services/${serviceId}`, { method: 'DELETE' });
+};
+
 export const getUsers = (): Promise<User[]> => {
     return adminRequest<User[]>('users');
 };
 
 export const promoteUser = (userId: string): Promise<User> => {
     return adminRequest<User>(`users/${userId}/promote`, { method: 'PATCH' });
+};
+
+export const deleteUser = (userId: string): Promise<void> => {
+    return adminRequest<void>(`users/${userId}`, { method: 'DELETE' });
 };
